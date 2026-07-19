@@ -1,0 +1,312 @@
+# world.ir.yaml — hand-compiled v0.1 IR for PetStore (mongoose-express-ts)
+# Frontend: agent-inferred (source reconstructed; GitHub blocked deep fetch).
+# Every fact carries provenance: inferred + confidence; spans are approximate.
+
+meta:
+  ir_version: 0.1-draft
+  repo: petstore
+  commit: UNKNOWN (reconstruction of manish87sharma/PetStore @ master)
+  frontends:
+    - language: typescript
+      method: agent-inferred
+      confidence_default: 0.8
+      framework_contexts: [express, mongoose]   # FINDING: framework contexts are real
+
+entities:
+
+  - { id: repo:petstore, kind: repo }
+  - { id: dir:config, kind: container, contains_parent: repo:petstore }
+  - { id: dir:src, kind: container, contains_parent: repo:petstore }
+  - { id: dir:src/middleware, kind: container, contains_parent: dir:src }
+  - { id: dir:src/models, kind: container, contains_parent: dir:src }
+  - { id: dir:src/routes, kind: container, contains_parent: dir:src }
+  - { id: dir:src/routes/api, kind: container, contains_parent: dir:src/routes }
+  - { id: dir:src/types, kind: container, contains_parent: dir:src }
+
+  # ── units ──
+  - { id: unit:src/server.ts, kind: unit, contains_parent: dir:src,
+      roles: [app-entry], provenance: inferred }
+  - { id: unit:config/database.ts, kind: unit, contains_parent: dir:config, provenance: inferred }
+  - { id: unit:src/middleware/auth.ts, kind: unit, contains_parent: dir:src/middleware,
+      magnitudes: { fan_in: { raw: 5, norm: 1.0 } },   # guards 5 routes
+      provenance: inferred }
+  - { id: unit:src/models/User.ts, kind: unit, contains_parent: dir:src/models, provenance: inferred }
+  - { id: unit:src/models/Profile.ts, kind: unit, contains_parent: dir:src/models, provenance: inferred }
+  - { id: unit:src/routes/api/user.ts, kind: unit, contains_parent: dir:src/routes/api, provenance: inferred }
+  - { id: unit:src/routes/api/auth.ts, kind: unit, contains_parent: dir:src/routes/api, provenance: inferred }
+  - { id: unit:src/routes/api/profile.ts, kind: unit, contains_parent: dir:src/routes/api, provenance: inferred }
+  - { id: unit:src/types/Request.ts, kind: unit, contains_parent: dir:src/types, provenance: inferred }
+  - { id: unit:src/types/Payload.ts, kind: unit, contains_parent: dir:src/types, provenance: inferred }
+
+  # ── datashapes ──
+  - id: sym:src/models/User#IUser
+    kind: datashape
+    shape_class: interface
+    exported: true
+    contains_parent: unit:src/models/User.ts
+    fields_inferred: [email, password, avatar]
+    magnitudes: { fan_in: { raw: 3, norm: 1.0 } }
+    extends_external: external:mongoose#Document
+    provenance: { method: inferred, confidence: 0.85 }
+
+  - id: sym:src/models/Profile#IProfile
+    kind: datashape
+    shape_class: interface
+    exported: true
+    contains_parent: unit:src/models/Profile.ts
+    fields_inferred: [user, firstName, lastName, username]
+    provenance: { method: inferred, confidence: 0.85 }
+
+  - id: sym:src/types/Payload#Payload
+    kind: datashape
+    shape_class: interface
+    exported: true
+    contains_parent: unit:src/types/Payload.ts
+    roles: [serialized-contract]      # FINDING: shapes that cross the wire
+    provenance: { method: inferred, confidence: 0.8 }
+
+  - id: sym:src/types/Request#AuthRequest
+    kind: datashape
+    shape_class: interface
+    exported: true
+    contains_parent: unit:src/types/Request.ts
+    roles: [request-context]          # FINDING: context-augmentation shape
+    extends_external: external:express#Request
+    provenance: { method: inferred, confidence: 0.8 }
+
+  # ── values ──  FINDING: exported runtime values that are neither callable
+  # nor datashape. Mongoose models are constructor+query handles bound to a
+  # collection; the mongoose framework context assigns role data-store.
+  - id: sym:src/models/User#User
+    kind: value
+    roles: [data-store]
+    exported: true
+    contains_parent: unit:src/models/User.ts
+    stores_shape: sym:src/models/User#IUser
+    magnitudes: { fan_in: { raw: 2, norm: 0.9 } }
+    provenance: { method: inferred, confidence: 0.85, context: mongoose }
+
+  - id: sym:src/models/Profile#Profile
+    kind: value
+    roles: [data-store]
+    exported: true
+    contains_parent: unit:src/models/Profile.ts
+    stores_shape: sym:src/models/Profile#IProfile
+    provenance: { method: inferred, confidence: 0.85, context: mongoose }
+
+  # FINDING: routers are exported values too (registered handler bundles)
+  - { id: sym:src/routes/api/user#router, kind: value, roles: [http-router],
+      exported: true, contains_parent: unit:src/routes/api/user.ts,
+      mounted_at: /api/user, provenance: { method: inferred, context: express } }
+  - { id: sym:src/routes/api/auth#router, kind: value, roles: [http-router],
+      exported: true, contains_parent: unit:src/routes/api/auth.ts,
+      mounted_at: /api/auth, provenance: { method: inferred, context: express } }
+  - { id: sym:src/routes/api/profile#router, kind: value, roles: [http-router],
+      exported: true, contains_parent: unit:src/routes/api/profile.ts,
+      mounted_at: /api/profile, provenance: { method: inferred, context: express } }
+
+  # ── callables ──
+  - id: sym:config/database#connectDB
+    kind: callable
+    exported: true
+    contains_parent: unit:config/database.ts
+    behavior:
+      - { region: async-boundary }
+      - { region: error-path, catches: ["external:*"], terminal: process-exit }
+    provenance: { method: inferred, confidence: 0.85 }
+
+  - id: sym:src/middleware/auth#authMiddleware
+    kind: callable
+    exported: true
+    anonymous: true                    # default-exported unnamed function
+    roles: [http-guard]                # FINDING: guard role from express context
+    contains_parent: unit:src/middleware/auth.ts
+    behavior:
+      - { region: branch, arms: 1 }                  # missing token
+      - { region: error-path, catches: [external:jsonwebtoken#JsonWebTokenError] }
+      - { region: side-effect, effect: request-mutation, writes: userId }
+    provenance: { method: inferred, confidence: 0.85 }
+
+  # Route handlers: all anonymous closures, all promoted via the entry-role rule.
+  # Names are synthetic; express context supplies method + path metadata.
+  - id: sym:src/routes/api/user#registerUser
+    kind: callable
+    anonymous: true
+    roles: [http-entry]
+    http: { method: POST, path: /api/user }
+    contains_parent: unit:src/routes/api/user.ts
+    behavior:
+      - { region: branch, arms: 2 }                  # validation, existing user
+      - { region: async-boundary }
+      - { region: side-effect, effect: db-write, target: sym:src/models/User#User }
+      - { region: error-path, catches: ["external:*"], handled: locally }
+    provenance: { method: inferred, confidence: 0.8 }
+
+  - id: sym:src/routes/api/auth#getCurrentUser
+    kind: callable
+    anonymous: true
+    roles: [http-entry]
+    http: { method: GET, path: /api/auth }
+    guarded_by: [sym:src/middleware/auth#authMiddleware]
+    contains_parent: unit:src/routes/api/auth.ts
+    behavior:
+      - { region: async-boundary }
+      - { region: side-effect, effect: db-read, target: sym:src/models/User#User }
+      - { region: error-path, catches: ["external:*"], handled: locally }
+    provenance: { method: inferred, confidence: 0.8 }
+
+  - id: sym:src/routes/api/auth#loginUser
+    kind: callable
+    anonymous: true
+    roles: [http-entry]
+    http: { method: POST, path: /api/auth }
+    contains_parent: unit:src/routes/api/auth.ts
+    behavior:
+      - { region: branch, arms: 3 }                  # validation, no user, bad password
+      - { region: async-boundary }
+      - { region: side-effect, effect: db-read, target: sym:src/models/User#User }
+      - { region: error-path, catches: ["external:*"], handled: locally }
+    provenance: { method: inferred, confidence: 0.8 }
+
+  - id: sym:src/routes/api/profile#getMyProfile
+    kind: callable
+    anonymous: true
+    roles: [http-entry]
+    http: { method: GET, path: /api/profile/me }
+    guarded_by: [sym:src/middleware/auth#authMiddleware]
+    contains_parent: unit:src/routes/api/profile.ts
+    behavior:
+      - { region: branch, arms: 1 }
+      - { region: async-boundary }
+      - { region: side-effect, effect: db-read, target: sym:src/models/Profile#Profile }
+      - { region: error-path, catches: ["external:*"], handled: locally }
+    provenance: { method: inferred, confidence: 0.8 }
+
+  - id: sym:src/routes/api/profile#upsertProfile
+    kind: callable
+    anonymous: true
+    roles: [http-entry]
+    http: { method: POST, path: /api/profile }
+    guarded_by: [sym:src/middleware/auth#authMiddleware]
+    contains_parent: unit:src/routes/api/profile.ts
+    behavior:
+      - { region: branch, arms: 2 }                  # validation, create-vs-update
+      - { region: async-boundary }
+      - { region: side-effect, effect: db-write, target: sym:src/models/Profile#Profile }
+      - { region: error-path, catches: ["external:*"], handled: locally }
+    provenance: { method: inferred, confidence: 0.8 }
+
+  - id: sym:src/routes/api/profile#listProfiles
+    kind: callable
+    anonymous: true
+    roles: [http-entry]
+    http: { method: GET, path: /api/profile }
+    contains_parent: unit:src/routes/api/profile.ts
+    behavior:
+      - { region: async-boundary }
+      - { region: side-effect, effect: db-read, target: sym:src/models/Profile#Profile }
+      - { region: error-path, catches: ["external:*"], handled: locally }
+    provenance: { method: inferred, confidence: 0.8 }
+
+  - id: sym:src/routes/api/profile#deleteProfile
+    kind: callable
+    anonymous: true
+    roles: [http-entry]
+    http: { method: DELETE, path: /api/profile }
+    guarded_by: [sym:src/middleware/auth#authMiddleware]
+    contains_parent: unit:src/routes/api/profile.ts
+    behavior:
+      - { region: async-boundary }
+      - { region: side-effect, effect: db-write, target: sym:src/models/Profile#Profile }
+      - { region: error-path, catches: ["external:*"], handled: locally }
+    provenance: { method: inferred, confidence: 0.8 }
+
+  # ── externals (major terrain in this repo) ──
+  - { id: external:express, kind: external, ecosystem: npm, provenance: inferred }
+  - { id: external:express#Request, kind: external, ecosystem: npm, provenance: inferred }
+  - { id: external:mongoose, kind: external, ecosystem: npm, provenance: inferred }
+  - { id: external:mongoose#Document, kind: external, ecosystem: npm, provenance: inferred }
+  - { id: external:bcryptjs, kind: external, ecosystem: npm, provenance: inferred }
+  - { id: external:jsonwebtoken, kind: external, ecosystem: npm, provenance: inferred }
+  - { id: external:gravatar, kind: external, ecosystem: npm, provenance: inferred }
+  - { id: external:express-validator, kind: external, ecosystem: npm, provenance: inferred }
+  - { id: external:http-status-codes, kind: external, ecosystem: npm, provenance: inferred }
+
+  # FINDING: stringly-typed config keys create hidden coupling; modeled as
+  # externals in a runtime-config ecosystem so shared taps become visible.
+  - { id: external:config#mongoURI, kind: external, ecosystem: runtime-config, provenance: inferred }
+  - { id: external:config#jwtSecret, kind: external, ecosystem: runtime-config,
+      magnitudes: { fan_in: { raw: 3, norm: 1.0 } }, provenance: inferred }
+  - { id: external:config#jwtExpiration, kind: external, ecosystem: runtime-config, provenance: inferred }
+
+relations:
+
+  # module dependency (abridged to in-repo edges; every unit also depends on
+  # its imported externals, elided here for readability — full-res IR keeps them)
+  - { type: depends-on, from: unit:src/server.ts, to: unit:config/database.ts }
+  - { type: depends-on, from: unit:src/server.ts, to: unit:src/routes/api/auth.ts }
+  - { type: depends-on, from: unit:src/server.ts, to: unit:src/routes/api/user.ts }
+  - { type: depends-on, from: unit:src/server.ts, to: unit:src/routes/api/profile.ts }
+  - { type: depends-on, from: unit:src/routes/api/auth.ts, to: unit:src/middleware/auth.ts }
+  - { type: depends-on, from: unit:src/routes/api/profile.ts, to: unit:src/middleware/auth.ts }
+  - { type: depends-on, from: unit:src/routes/api/user.ts, to: unit:src/models/User.ts }
+  - { type: depends-on, from: unit:src/routes/api/auth.ts, to: unit:src/models/User.ts }
+  - { type: depends-on, from: unit:src/routes/api/profile.ts, to: unit:src/models/Profile.ts }
+  - { type: depends-on, from: unit:src/models/Profile.ts, to: unit:src/models/User.ts }
+  - { type: depends-on, from: unit:src/middleware/auth.ts, to: unit:src/types/Request.ts }
+  - { type: depends-on, from: unit:src/middleware/auth.ts, to: unit:src/types/Payload.ts }
+
+  # guard edges (framework-mediated control flow; NOT calls)
+  - { type: guards, from: sym:src/middleware/auth#authMiddleware, to: sym:src/routes/api/auth#getCurrentUser }
+  - { type: guards, from: sym:src/middleware/auth#authMiddleware, to: sym:src/routes/api/profile#getMyProfile }
+  - { type: guards, from: sym:src/middleware/auth#authMiddleware, to: sym:src/routes/api/profile#upsertProfile }
+  - { type: guards, from: sym:src/middleware/auth#authMiddleware, to: sym:src/routes/api/profile#deleteProfile }
+
+  # data-store access (framework context turns method calls into store edges)
+  - { type: accesses, mode: write, from: sym:src/routes/api/user#registerUser, to: sym:src/models/User#User }
+  - { type: accesses, mode: read,  from: sym:src/routes/api/auth#getCurrentUser, to: sym:src/models/User#User }
+  - { type: accesses, mode: read,  from: sym:src/routes/api/auth#loginUser, to: sym:src/models/User#User }
+  - { type: accesses, mode: read,  from: sym:src/routes/api/profile#getMyProfile, to: sym:src/models/Profile#Profile }
+  - { type: accesses, mode: write, from: sym:src/routes/api/profile#upsertProfile, to: sym:src/models/Profile#Profile }
+  - { type: accesses, mode: read,  from: sym:src/routes/api/profile#listProfiles, to: sym:src/models/Profile#Profile }
+  - { type: accesses, mode: write, from: sym:src/routes/api/profile#deleteProfile, to: sym:src/models/Profile#Profile }
+
+  # type-level dataflow
+  - { type: flows-into, shape: sym:src/models/User#IUser, precision: type,
+      from: sym:src/models/User#User, to: sym:src/routes/api/auth#loginUser, via: return }
+  - { type: flows-into, shape: sym:src/models/Profile#IProfile, precision: type,
+      from: sym:src/models/Profile#Profile, to: sym:src/routes/api/profile#getMyProfile, via: return }
+
+  # FINDING: temporal flow through an opaque external medium. Payload is
+  # serialized into a JWT at login/register, leaves the system, and re-enters
+  # on later requests where the middleware deserializes it. Invisible to
+  # def-use analysis; inferable by an agent reading both ends of the contract.
+  - { type: flows-into, shape: sym:src/types/Payload#Payload, precision: type,
+      mode: temporal, via: serialized-token,
+      from: sym:src/routes/api/auth#loginUser,
+      to: sym:src/middleware/auth#authMiddleware,
+      medium: external:jsonwebtoken,
+      provenance: { method: inferred, confidence: 0.9 } }
+  - { type: flows-into, shape: sym:src/types/Payload#Payload, precision: type,
+      mode: temporal, via: serialized-token,
+      from: sym:src/routes/api/user#registerUser,
+      to: sym:src/middleware/auth#authMiddleware,
+      medium: external:jsonwebtoken,
+      provenance: { method: inferred, confidence: 0.9 } }
+
+  # request-context flow: middleware writes userId, guarded handlers read it
+  - { type: flows-into, shape: sym:src/types/Request#AuthRequest, precision: type,
+      mode: context, via: request-mutation,
+      from: sym:src/middleware/auth#authMiddleware,
+      to: sym:src/routes/api/profile#upsertProfile }
+
+  # shared config taps (hidden coupling made visible)
+  - { type: references, from: sym:src/middleware/auth#authMiddleware, to: external:config#jwtSecret }
+  - { type: references, from: sym:src/routes/api/auth#loginUser, to: external:config#jwtSecret }
+  - { type: references, from: sym:src/routes/api/user#registerUser, to: external:config#jwtSecret }
+  - { type: references, from: sym:config/database#connectDB, to: external:config#mongoURI }
+
+  # type system edges
+  - { type: extends, from: sym:src/models/User#IUser, to: external:mongoose#Document }
+  - { type: extends, from: sym:src/types/Request#AuthRequest, to: external:express#Request }
+  - { type: references, from: sym:src/models/Profile#IProfile, to: sym:src/models/User#IUser }

@@ -1,0 +1,221 @@
+# world.ir.yaml — hand-compiled v0 IR for toyshop
+# In production this is streamable JSONL (one entity/relation per line);
+# YAML here for human readability during spec design.
+
+meta:
+  ir_version: 0.1-draft
+  repo: toyshop
+  commit: WORKING_TREE
+  frontends:
+    - { language: typescript, method: hand-compiled, stands_in_for: parsed }
+
+# ─────────────────────────────────────────────
+# ENTITIES
+# Kinds: repo | container | unit | callable | datashape | external
+# ("external" and datashape-as-container are findings from this exercise — see notes)
+# Magnitudes: raw values kept alongside normalized [0,1] so diffs survive renormalization.
+# ─────────────────────────────────────────────
+entities:
+
+  - id: repo:toyshop
+    kind: repo
+
+  - id: dir:src
+    kind: container
+    contains_parent: repo:toyshop
+
+  # ── units (files) ──
+  - id: unit:src/types.ts
+    kind: unit
+    contains_parent: dir:src
+    magnitudes: { size: { raw_loc: 20, norm: 0.7 } }
+    provenance: parsed
+
+  - id: unit:src/validate.ts
+    kind: unit
+    contains_parent: dir:src
+    magnitudes: { size: { raw_loc: 16, norm: 0.55 } }
+    provenance: parsed
+
+  - id: unit:src/db.ts
+    kind: unit
+    contains_parent: dir:src
+    magnitudes: { size: { raw_loc: 15, norm: 0.5 } }
+    provenance: parsed
+
+  - id: unit:src/service.ts
+    kind: unit
+    contains_parent: dir:src
+    magnitudes: { size: { raw_loc: 19, norm: 0.65 } }
+    provenance: parsed
+
+  - id: unit:src/index.ts
+    kind: unit
+    contains_parent: dir:src
+    magnitudes: { size: { raw_loc: 27, norm: 1.0 } }
+    provenance: parsed
+
+  # ── datashapes ──
+  - id: sym:src/types#OrderItem
+    kind: datashape
+    shape_class: interface          # interface | record | class | enum | alias
+    exported: true                  # FINDING: exportedness is a flag, not an entity kind
+    contains_parent: unit:src/types.ts
+    fingerprint: fp:9a41c2
+    source: { file: src/types.ts, span: [1, 5] }
+    provenance: parsed
+
+  - id: sym:src/types#Order
+    kind: datashape
+    shape_class: interface
+    exported: true
+    contains_parent: unit:src/types.ts
+    magnitudes: { fan_in: { raw: 4, norm: 1.0 } }   # most-referenced shape in repo
+    fingerprint: fp:d02e88
+    source: { file: src/types.ts, span: [7, 12] }
+    provenance: parsed
+
+  - id: sym:src/types#ValidationError
+    kind: datashape
+    shape_class: class
+    exported: true
+    contains_parent: unit:src/types.ts
+    roles: [error-type]
+    fingerprint: fp:41bb0e
+    source: { file: src/types.ts, span: [14, 18] }
+    provenance: parsed
+
+  - id: sym:src/db#OrderStore
+    kind: datashape
+    shape_class: class
+    exported: true
+    contains_parent: unit:src/db.ts
+    fingerprint: fp:77aa19
+    source: { file: src/db.ts, span: [3, 15] }
+    provenance: parsed
+    # FINDING: classes are datashapes that CONTAIN callables (methods).
+    # The containment tree therefore descends through datashapes.
+
+  # ── callables ──
+  - id: sym:src/validate#validateOrder
+    kind: callable
+    exported: true
+    contains_parent: unit:src/validate.ts
+    magnitudes: { complexity: { raw_branches: 3, norm: 0.75 } }
+    behavior:
+      - { region: branch, arms: 1 }                    # empty-items guard
+      - region: loop
+        body:
+          - { region: branch, arms: 1 }                # quantity guard
+          - { region: branch, arms: 1 }                # price guard
+      - { region: error-path, raises: sym:src/types#ValidationError }
+    fingerprint: fp:c3f501
+    source: { file: src/validate.ts, span: [3, 16] }
+    provenance: parsed
+
+  - id: sym:src/db#OrderStore.save
+    kind: callable
+    exported: true                   # exported via its containing class
+    contains_parent: sym:src/db#OrderStore
+    behavior:
+      - { region: async-boundary }
+      - { region: side-effect, effect: state-mutation }
+    fingerprint: fp:1e9c44
+    source: { file: src/db.ts, span: [6, 9] }
+    provenance: parsed
+
+  - id: sym:src/db#OrderStore.findById
+    kind: callable
+    exported: true
+    contains_parent: sym:src/db#OrderStore
+    behavior:
+      - { region: async-boundary }
+    fingerprint: fp:8d2f6a
+    source: { file: src/db.ts, span: [11, 13] }
+    provenance: parsed
+
+  - id: sym:src/service#placeOrder
+    kind: callable
+    exported: true
+    contains_parent: unit:src/service.ts
+    magnitudes: { fan_out: { raw: 2, norm: 1.0 } }
+    behavior:
+      - { region: loop }                               # total computation
+      - { region: async-boundary }
+    fingerprint: fp:b6e073
+    source: { file: src/service.ts, span: [5, 18] }
+    provenance: parsed
+
+  - id: sym:src/index#requestHandler
+    kind: callable
+    exported: false
+    roles: [http-entry]              # FINDING: entry-ness as role, confirmed workable
+    contains_parent: unit:src/index.ts
+    anonymous: true                  # FINDING: promoted anonymous callback (see notes)
+    behavior:
+      - { region: async-boundary }
+      - { region: error-path, catches: [sym:src/types#ValidationError, "external:*"] }
+      - { region: branch, arms: 2 }                    # 400 vs 500 mapping
+      - { region: side-effect, effect: network-io }
+    fingerprint: fp:f00d21
+    source: { file: src/index.ts, span: [8, 24] }
+    provenance: parsed
+
+  # ── externals ──
+  # FINDING: need entities for the world beyond the city walls.
+  - id: external:node/http#createServer
+    kind: external
+    ecosystem: node-stdlib
+    provenance: indexed
+
+  - id: external:ecma#Error
+    kind: external
+    ecosystem: ecma-stdlib
+    provenance: indexed
+
+# ─────────────────────────────────────────────
+# RELATIONS
+# Tree relation `contains` is encoded above via contains_parent (drives layout).
+# Everything below is graph-shaped (renders as connections, never moves buildings).
+# ─────────────────────────────────────────────
+relations:
+
+  # module dependency (roads between districts)
+  - { type: depends-on, from: unit:src/validate.ts, to: unit:src/types.ts }
+  - { type: depends-on, from: unit:src/db.ts,       to: unit:src/types.ts }
+  - { type: depends-on, from: unit:src/service.ts,  to: unit:src/types.ts }
+  - { type: depends-on, from: unit:src/service.ts,  to: unit:src/validate.ts }
+  - { type: depends-on, from: unit:src/service.ts,  to: unit:src/db.ts }
+  - { type: depends-on, from: unit:src/index.ts,    to: unit:src/types.ts }
+  - { type: depends-on, from: unit:src/index.ts,    to: unit:src/db.ts }
+  - { type: depends-on, from: unit:src/index.ts,    to: unit:src/service.ts }
+  - { type: depends-on, from: unit:src/index.ts,    to: external:node/http#createServer }
+
+  # call graph (paths between buildings)
+  - { type: calls, from: sym:src/index#requestHandler, to: sym:src/service#placeOrder, awaited: true }
+  - { type: calls, from: sym:src/service#placeOrder,   to: sym:src/validate#validateOrder }
+  - { type: calls, from: sym:src/service#placeOrder,   to: sym:src/db#OrderStore.save, awaited: true }
+  - { type: calls, from: sym:src/index#requestHandler, to: sym:src/db#OrderStore,
+      instantiates: true }           # FINDING: constructor calls tagged, not a new edge type
+
+  # type-level dataflow (the traced-path feature compiles from these)
+  - { type: flows-into, shape: sym:src/types#Order, precision: type,
+      from: sym:src/service#placeOrder, to: sym:src/validate#validateOrder, via: parameter }
+  - { type: flows-into, shape: sym:src/types#Order, precision: type,
+      from: sym:src/service#placeOrder, to: sym:src/db#OrderStore.save, via: parameter }
+  - { type: flows-into, shape: sym:src/types#Order, precision: type,
+      from: sym:src/db#OrderStore.save, to: sym:src/service#placeOrder, via: return }
+  - { type: flows-into, shape: sym:src/types#Order, precision: type,
+      from: sym:src/service#placeOrder, to: sym:src/index#requestHandler, via: return }
+  - { type: flows-into, shape: sym:src/db#OrderStore, precision: type,
+      from: sym:src/index#requestHandler, to: sym:src/service#placeOrder,
+      via: parameter, mode: capability }   # FINDING: DI is flow of capability, not data
+
+  # error propagation (drainage)
+  - { type: error-flows, shape: sym:src/types#ValidationError,
+      from: sym:src/validate#validateOrder, to: sym:src/index#requestHandler,
+      through: [sym:src/service#placeOrder] }
+
+  # type system edges
+  - { type: extends, from: sym:src/types#ValidationError, to: external:ecma#Error }
+  - { type: references, from: sym:src/types#Order, to: sym:src/types#OrderItem }

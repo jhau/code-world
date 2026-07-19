@@ -1,0 +1,23 @@
+import { Document, model, Schema } from "mongoose";
+import { IUser } from "./User";
+
+/**
+ * Interface to model the Profile Schema for TypeScript.
+ */
+export interface IProfile extends Document {
+  user: IUser["_id"];
+  firstName: string;
+  lastName: string;
+  username: string;
+}
+
+const profileSchema: Schema = new Schema({
+  user: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  firstName: { type: String, required: true },
+  lastName: { type: String, required: true },
+  username: { type: String, required: true, unique: true },
+});
+
+const Profile = model<IProfile>("Profile", profileSchema);
+
+export default Profile;
