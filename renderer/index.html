@@ -23,6 +23,9 @@
       #panel .close { float: right; cursor: pointer; color: #6b7690; }
       #fatal { top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 70vw; max-height: 70vh; overflow: auto; display: none; border-color: #d45f5f; }
       #fatal h2 { color: #d45f5f; margin-top: 0; }
+      #compass { right: 12px; bottom: 12px; width: 64px; height: 64px; padding: 5px; border-radius: 50%; pointer-events: none; }
+      #compass svg { display: block; width: 64px; height: 64px; }
+      #compass-needle { transform-box: view-box; transform-origin: center; }
     </style>
   </head>
   <body>
@@ -36,10 +39,22 @@
       <div id="hud-status"></div>
       <div id="legend"></div>
       <div id="trace-status"></div>
-      <div class="hint">drag: orbit &middot; scroll: zoom &middot; right-drag: pan &middot; click: inspect &middot; click a building: reveal its deliveries &middot; click a datashape: trace its flows</div>
+      <div class="hint">drag: orbit &middot; scroll: zoom &middot; arrows/WASD: move &middot; right-drag: pan &middot; click: inspect &middot; click a building: reveal its deliveries &middot; click a datashape: trace its flows</div>
     </div>
     <div id="panel" class="overlay"></div>
     <div id="fatal" class="overlay"><h2>IR error</h2><pre id="fatal-body"></pre></div>
+    <div id="compass" class="overlay" role="img" aria-label="North compass">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="32" cy="32" r="27" fill="none" stroke="#2a3348" stroke-width="2" />
+        <path d="M32 5v5M32 54v5M5 32h5M54 32h5" stroke="#6b7690" stroke-width="1.5" />
+        <g id="compass-needle">
+          <path d="M32 16L27 34L32 31L37 34Z" fill="#e8d56a" />
+          <path d="M32 48L27 30L32 33L37 30Z" fill="#6b7690" />
+          <circle cx="32" cy="32" r="2.5" fill="#c8d0e0" />
+          <text x="32" y="13" fill="#e8d56a" font-size="9" font-weight="600" text-anchor="middle">N</text>
+        </g>
+      </svg>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

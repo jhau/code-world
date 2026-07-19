@@ -169,6 +169,19 @@ async function main(): Promise<void> {
   controls.enableDamping = true;
   controls.maxPolarAngle = Math.PI / 2 - 0.02;
 
+  const movementKeys = new Set<string>();
+  const normalizeMovementKey = (key: string): string => (key.length === 1 ? key.toLowerCase() : key);
+  const isArrowKey = (key: string): boolean => key.startsWith("Arrow");
+  window.addEventListener("keydown", (ev) => {
+    if (isArrowKey(ev.key)) ev.preventDefault();
+    movementKeys.add(normalizeMovementKey(ev.key));
+  });
+  window.addEventListener("keyup", (ev) => {
+    if (isArrowKey(ev.key)) ev.preventDefault();
+    movementKeys.delete(normalizeMovementKey(ev.key));
+  });
+  window.addEventListener("blur", () => movementKeys.clear());
+
   window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -240,10 +253,43 @@ async function main(): Promise<void> {
   // Debug hook for tooling/console camera control; not a public API.
   (window as unknown as Record<string, unknown>).__world = { scene, camera, controls };
 
+  const compassNeedle = el("compass-needle");
+  const forward = new THREE.Vector3();
+  const right = new THREE.Vector3();
+  const movement = new THREE.Vector3();
   const clock = new THREE.Clock();
+  let previousElapsedTime = 0;
   renderer.setAnimationLoop(() => {
+    const elapsedTime = clock.getElapsedTime();
+    const deltaTime = Math.min(elapsedTime - previousElapsedTime, 0.1);
+    previousElapsedTime = elapsedTime;
+
     controls.update();
-    connections.animate(clock.getElapsedTime());
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    if (forward.lengthSq() > 0) forward.normalize();
+    right.set(-forward.z, 0, forward.x);
+
+    const forwardInput =
+      Number(movementKeys.has("ArrowUp") || movementKeys.has("w")) -
+      Number(movementKeys.has("ArrowDown") || movementKeys.has("s"));
+    const rightInput =
+      Number(movementKeys.has("ArrowRight") || movementKeys.has("d")) -
+      Number(movementKeys.has("ArrowLeft") || movementKeys.has("a"));
+    movement.copy(forward).multiplyScalar(forwardInput).addScaledVector(right, rightInput);
+    if (movement.lengthSq() > 0) {
+      const distance = camera.position.distanceTo(controls.target);
+      const speed = THREE.MathUtils.clamp(distance * 0.6, 4, 30);
+      movement.normalize().multiplyScalar(speed * deltaTime);
+      camera.position.add(movement);
+      controls.target.add(movement);
+    }
+
+    const headingX = controls.target.x - camera.position.x;
+    const headingZ = controls.target.z - camera.position.z;
+    const azimuth = Math.atan2(headingX, -headingZ);
+    compassNeedle.style.transform = `rotate(${-azimuth}rad)`;
+    connections.animate(elapsedTime);
     renderer.render(scene, camera);
   });
 }

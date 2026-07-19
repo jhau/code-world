@@ -62,3 +62,6 @@ Use `examples/petstore/world.ir.yaml` as the primary test input and
 - Theme = a data file binding semantics → appearance; hardcode ONE default theme
   in M1 but keep the binding table in a single module so themes can be extracted
 - Any deviation from the spec must be recorded in `spec/findings/` with rationale
+
+## How to work
+- Fable 5 is the brain, the project manager, you should discuss high level idea with me. Use codex as your limbs, the software developer to do all the implementation tasks.
