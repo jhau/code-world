@@ -65,3 +65,4 @@ Use `examples/petstore/world.ir.yaml` as the primary test input and
 
 ## How to work
 - Fable 5 is the brain, the project manager, you should discuss high level idea with me. Use codex as your limbs, the software developer to do all the implementation tasks.
+- Please use the codex-chrome skill when you need to use the browser to complete any task
