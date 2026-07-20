@@ -12,6 +12,8 @@ export interface Rect {
 export interface TreemapItem {
   key: string;
   weight: number;
+  /** Higher values are placed earlier without changing allocated area. */
+  priority?: number;
 }
 
 export interface PlacedItem {
@@ -22,6 +24,7 @@ export interface PlacedItem {
 interface Scaled {
   key: string;
   area: number;
+  priority: number;
 }
 
 function worstAspect(row: Scaled[], side: number): number {
@@ -72,8 +75,13 @@ export function squarify(items: TreemapItem[], rect: Rect): PlacedItem[] {
 
   const scaled: Scaled[] = items
     .slice()
-    .sort((a, b) => b.weight - a.weight || (a.key < b.key ? -1 : 1))
-    .map((i) => ({ key: i.key, area: (i.weight / total) * area }));
+    .sort(
+      (a, b) =>
+        (b.priority ?? 0) - (a.priority ?? 0) ||
+        b.weight - a.weight ||
+        (a.key < b.key ? -1 : 1),
+    )
+    .map((i) => ({ key: i.key, area: (i.weight / total) * area, priority: i.priority ?? 0 }));
 
   const out: PlacedItem[] = [];
   let free: Rect = { ...rect };

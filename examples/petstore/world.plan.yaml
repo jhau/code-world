@@ -1,0 +1,11 @@
+version: 0.1
+name: default
+groups:
+  - id: logical:api-gateway
+    label: API Gateway
+    form: building
+    placement: gate
+    parent: repo:petstore
+    select:
+      - roles: [http-router]
+      - roles: [http-entry]

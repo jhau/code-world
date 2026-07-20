@@ -5,10 +5,13 @@ import { resolveSourceLink, type SourceLinkOverrides } from "./ir/sourcelink";
 import { validateIR } from "./ir/validate";
 import type { Entity, Relation, WorldIR } from "./ir/types";
 import { computeLayout } from "./layout/layout";
+import { applyPlan } from "./plan/apply";
+import { parsePlan, planPathForIR } from "./plan/load";
 import { buildWorld } from "./render/world";
 import { applyView, buildConnections, flowsTouching, type ViewState } from "./render/connections";
 import { deriveGates, derivePosterns } from "./render/gates";
 import { defaultTheme, routeKeyFor } from "./render/theme";
+import { buildUnderground, deriveFoundationPipes } from "./render/underground";
 
 const DEFAULT_WORLD = "/petstore/world.ir.yaml";
 
@@ -72,10 +75,15 @@ function escapeHtmlAttribute(value: string): string {
     .replaceAll(">", "&gt;");
 }
 
-function showPanel(e: Entity, ir: WorldIR, sourceLinkOverrides: SourceLinkOverrides): void {
+function showPanel(
+  e: Entity,
+  ir: WorldIR,
+  sourceIR: WorldIR,
+  sourceLinkOverrides: SourceLinkOverrides,
+): void {
   const panel = el("panel");
   panel.style.display = "block";
-  const sourceLink = resolveSourceLink(ir, e.id, sourceLinkOverrides);
+  const sourceLink = resolveSourceLink(sourceIR, e.id, sourceLinkOverrides);
   const sourceLinkRow = sourceLink
     ? `<div class="source-link"><a href="${escapeHtmlAttribute(sourceLink)}" target="_blank" rel="noopener">view on GitHub ↗</a></div>`
     : "";
@@ -91,6 +99,25 @@ async function loadWorld(path: string): Promise<WorldIR> {
   return parseIR(await res.text(), detectFormat(path));
 }
 
+async function loadPlanForWorld(path: string) {
+  const planPath = planPathForIR(path);
+  if (planPath === null) return null;
+  let response: Response;
+  try {
+    response = await fetch(planPath);
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    return null;
+  }
+  return parsePlan(text);
+}
+
 async function main(): Promise<void> {
   const params = new URLSearchParams(location.search);
   const worldPath = params.get("world") ?? DEFAULT_WORLD;
@@ -100,9 +127,12 @@ async function main(): Promise<void> {
   if (repoOverride !== null) sourceLinkOverrides.repo = repoOverride;
   if (refOverride !== null) sourceLinkOverrides.ref = refOverride;
 
+  let sourceIR: WorldIR;
   let ir: WorldIR;
   try {
-    ir = await loadWorld(worldPath);
+    sourceIR = await loadWorld(worldPath);
+    const plan = await loadPlanForWorld(worldPath);
+    ir = plan === null ? sourceIR : applyPlan(sourceIR, plan);
   } catch (err) {
     showFatal(String(err));
     return;
@@ -117,8 +147,15 @@ async function main(): Promise<void> {
   const layout = computeLayout(ir);
   const gates = deriveGates(ir, layout);
   const posterns = derivePosterns(ir, layout, gates);
-  const { group, pickables } = buildWorld(layout, defaultTheme, gates, posterns);
+  const world = buildWorld(layout, defaultTheme, gates, posterns);
+  const { group, pickables } = world;
   const connections = buildConnections(ir, layout, defaultTheme, gates, posterns);
+  const pipes = deriveFoundationPipes(
+    sourceIR,
+    layout,
+    new Set(gates.map((gate) => gate.entity.id)),
+  );
+  const underground = buildUnderground(pipes, defaultTheme);
   const meshById = new Map<string, THREE.Mesh>(
     pickables.map((m) => [(m.userData.entity as Entity).id, m]),
   );
@@ -178,6 +215,15 @@ async function main(): Promise<void> {
   scene.fog = new THREE.Fog(defaultTheme.fog.color, defaultTheme.fog.near, defaultTheme.fog.far);
   scene.add(group);
   scene.add(connections.group);
+  scene.add(underground);
+
+  let xray = false;
+  window.addEventListener("keydown", (ev) => {
+    if (ev.repeat || ev.key.toLowerCase() !== "u") return;
+    xray = !xray;
+    world.setXray(xray);
+    underground.visible = xray;
+  });
 
   const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
   const span = Math.max(layout.bounds.w, layout.bounds.d);
@@ -254,7 +300,7 @@ async function main(): Promise<void> {
     const hit = raycaster.intersectObjects(allPickables, false)[0];
     const entity = hit?.object.userData.entity as Entity | undefined;
     if (!entity) return;
-    showPanel(entity, ir, sourceLinkOverrides);
+    showPanel(entity, ir, sourceIR, sourceLinkOverrides);
     if (entity.kind === "datashape") {
       view = {
         tracedShape: view.tracedShape === entity.id ? null : entity.id,
@@ -270,7 +316,13 @@ async function main(): Promise<void> {
   });
 
   // Debug hook for tooling/console camera control; not a public API.
-  (window as unknown as Record<string, unknown>).__world = { scene, camera, controls };
+  (window as unknown as Record<string, unknown>).__world = {
+    scene,
+    camera,
+    controls,
+    underground,
+    pipes,
+  };
 
   const compassNeedle = el("compass-needle");
   const forward = new THREE.Vector3();

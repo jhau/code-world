@@ -60,12 +60,15 @@ function leafWeight(e: Entity): number {
   return 1 + buildingNorm(e) + 0.5 * (getNorm(e, "fan_in") ?? 0);
 }
 
-function buildingHeight(e: Entity): number {
-  return 0.8 + 4.5 * buildingNorm(e);
+function buildingHeight(norm: number): number {
+  return 0.8 + 4.5 * norm;
 }
 
 function roleOf(e: Entity): NodeRole {
-  if (e.kind === "repo" || e.kind === "container") return "district";
+  if (e.attrs.plan_form === "building") return "building";
+  if (e.kind === "repo" || e.kind === "container" || e.attrs.plan_form === "district") {
+    return "district";
+  }
   if (e.kind === "unit") return "plot";
   return "building";
 }
@@ -74,6 +77,13 @@ interface TreeNode {
   entity: Entity;
   children: TreeNode[];
   area: number;
+}
+
+function nodeBuildingNorm(node: TreeNode): number {
+  if (node.entity.attrs.plan_form !== "building") return buildingNorm(node.entity);
+  let norm = 0;
+  for (const child of node.children) norm = Math.max(norm, buildingNorm(child.entity));
+  return norm;
 }
 
 function computeArea(node: TreeNode): number {
@@ -144,7 +154,7 @@ function place(
         : SLAB.container
       : role === "plot"
         ? SLAB.unit
-        : buildingHeight(e);
+        : buildingHeight(nodeBuildingNorm(node));
 
   const laid: LayoutNode = { entity: e, role, rect, y: baseY, height, depth, children: [] };
   nodes.push(laid);
@@ -154,7 +164,13 @@ function place(
     const inner = innerRect(rect, fill);
     const maxChildArea = Math.max(...node.children.map((c) => c.area));
     const placed = squarify(
-      node.children.map((c) => ({ key: c.entity.id, weight: cellWeight(c.area, maxChildArea) })),
+      node.children.map((c) => ({
+        key: c.entity.id,
+        weight: cellWeight(c.area, maxChildArea),
+        // Finding 006 v0: gate placement is only an ordering prior. TODO:
+        // replace this with real gate adjacency in a later plan version.
+        priority: c.entity.attrs.plan_placement === "gate" ? 1 : 0,
+      })),
       inner,
     );
     const byKey = new Map(node.children.map((c) => [c.entity.id, c]));

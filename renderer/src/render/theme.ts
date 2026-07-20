@@ -41,6 +41,14 @@ export interface Theme {
   postern: { frame: number };
   /** Fixed furniture around role-colored document sheets. */
   schematic: { frame: number; pedestal: number };
+  /** Filesystem foundation pipes shown only in x-ray mode. */
+  underground: {
+    shaftRadius: number;
+    pipeRadius: number;
+    opacity: number;
+    surfaceOpacity: number;
+    palette: number[];
+  };
 }
 
 export const defaultTheme: Theme = {
@@ -94,6 +102,13 @@ export const defaultTheme: Theme = {
   permit: { card: 0x5fd4e8, seal: 0xd9b44a, tent: 0x566070 },
   postern: { frame: 0x475064 },
   schematic: { frame: 0x46566f, pedestal: 0x4b4138 },
+  underground: {
+    shaftRadius: 0.025,
+    pipeRadius: 0.045,
+    opacity: 0.9,
+    surfaceOpacity: 0.2,
+    palette: [0x5fd4e8, 0xc47fd4, 0xe0a94f, 0x4fc2b8, 0x9fb4d6, 0xd45f5f],
+  },
 };
 
 /** Style key for a relation, or null when the relation is not drawn (M1
@@ -127,4 +142,13 @@ export function colorFor(theme: Theme, kind: string, roles: string[]): number {
 
 export function externalColor(theme: Theme, ecosystem: string | undefined): number {
   return (ecosystem && theme.ecosystems[ecosystem]) || theme.ecosystemDefault;
+}
+
+export function foundationColor(theme: Theme, file: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < file.length; i++) {
+    hash ^= file.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return theme.underground.palette[(hash >>> 0) % theme.underground.palette.length]!;
 }

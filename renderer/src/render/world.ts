@@ -13,6 +13,7 @@ export interface Pickable {
 export interface BuiltWorld {
   group: THREE.Group;
   pickables: THREE.Mesh[];
+  setXray(enabled: boolean): void;
 }
 
 function boxMesh(
@@ -34,20 +35,24 @@ function addNode(
   group: THREE.Group,
   pickables: THREE.Mesh[],
   suppressed: ReadonlySet<string>,
+  xraySurfaces: THREE.Mesh[],
 ): void {
   // Entities represented elsewhere (e.g. customs → city gate) keep their
   // layout slot but render no building; their plot stays as open ground.
   if (suppressed.has(node.entity.id)) return;
   const { rect, y, height } = node;
-  const isDistrict = node.role === "district" || node.role === "plot";
+  const isSlab = node.role === "district" || node.role === "plot";
   const color = colorFor(theme, node.entity.kind, node.entity.roles);
-  const mesh = boxMesh(rect.w, height, rect.d, color, isDistrict);
+  const mesh = boxMesh(rect.w, height, rect.d, color, isSlab);
   mesh.position.set(rect.x + rect.w / 2, y + height / 2, rect.z + rect.d / 2);
   mesh.userData.entity = node.entity;
   mesh.userData.node = node;
   group.add(mesh);
   pickables.push(mesh);
-  for (const child of node.children) addNode(child, theme, group, pickables, suppressed);
+  if (isSlab) xraySurfaces.push(mesh);
+  for (const child of node.children) {
+    addNode(child, theme, group, pickables, suppressed, xraySurfaces);
+  }
 }
 
 /** The city wall, opened where customs gates and exit posterns stand. */
@@ -114,6 +119,7 @@ export function buildWorld(
 ): BuiltWorld {
   const group = new THREE.Group();
   const pickables: THREE.Mesh[] = [];
+  const xraySurfaces: THREE.Mesh[] = [];
 
   const groundSize = Math.max(layout.bounds.w, layout.bounds.d) * 6 + 80;
   const ground = new THREE.Mesh(
@@ -123,12 +129,13 @@ export function buildWorld(
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.02;
   group.add(ground);
+  xraySurfaces.push(ground);
 
   const suppressed = new Set(gates.map((g) => g.entity.id));
   for (const schematic of deriveSchematics(layout, suppressed)) {
     suppressed.add(schematic.shape.entity.id);
   }
-  addNode(layout.root, theme, group, pickables, suppressed);
+  addNode(layout.root, theme, group, pickables, suppressed, xraySurfaces);
   addWall(layout, theme, [...gates, ...posterns], group);
   addExternals(layout, theme, group, pickables);
 
@@ -138,5 +145,15 @@ export function buildWorld(
   sun.position.set(30, 50, 20);
   group.add(sun);
 
-  return { group, pickables };
+  const setXray = (enabled: boolean): void => {
+    for (const mesh of xraySurfaces) {
+      const material = mesh.material as THREE.MeshLambertMaterial;
+      material.transparent = enabled;
+      material.opacity = enabled ? theme.underground.surfaceOpacity : 1;
+      material.depthWrite = !enabled;
+      material.needsUpdate = true;
+    }
+  };
+
+  return { group, pickables, setXray };
 }
