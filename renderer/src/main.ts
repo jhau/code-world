@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { detectFormat, parseIR } from "./ir/load";
+import { resolveSourceLink, type SourceLinkOverrides } from "./ir/sourcelink";
 import { validateIR } from "./ir/validate";
 import type { Entity, Relation, WorldIR } from "./ir/types";
 import { computeLayout } from "./layout/layout";
@@ -62,12 +63,25 @@ function describeEntity(e: Entity, relations: Relation[]): string {
   return lines.join("\n");
 }
 
-function showPanel(e: Entity, ir: WorldIR): void {
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function showPanel(e: Entity, ir: WorldIR, sourceLinkOverrides: SourceLinkOverrides): void {
   const panel = el("panel");
   panel.style.display = "block";
+  const sourceLink = resolveSourceLink(ir, e.id, sourceLinkOverrides);
+  const sourceLinkRow = sourceLink
+    ? `<div class="source-link"><a href="${escapeHtmlAttribute(sourceLink)}" target="_blank" rel="noopener">view on GitHub ↗</a></div>`
+    : "";
   panel.innerHTML =
     `<span class="close" id="panel-close">✕</span>` +
-    `<div class="id">${e.id}</div>\n${describeEntity(e, ir.relations)}`;
+    `<div class="id">${e.id}</div>${sourceLinkRow}\n${describeEntity(e, ir.relations)}`;
   el("panel-close").onclick = () => (panel.style.display = "none");
 }
 
@@ -80,6 +94,11 @@ async function loadWorld(path: string): Promise<WorldIR> {
 async function main(): Promise<void> {
   const params = new URLSearchParams(location.search);
   const worldPath = params.get("world") ?? DEFAULT_WORLD;
+  const sourceLinkOverrides: SourceLinkOverrides = {};
+  const repoOverride = params.get("repo");
+  const refOverride = params.get("ref");
+  if (repoOverride !== null) sourceLinkOverrides.repo = repoOverride;
+  if (refOverride !== null) sourceLinkOverrides.ref = refOverride;
 
   let ir: WorldIR;
   try {
@@ -235,7 +254,7 @@ async function main(): Promise<void> {
     const hit = raycaster.intersectObjects(allPickables, false)[0];
     const entity = hit?.object.userData.entity as Entity | undefined;
     if (!entity) return;
-    showPanel(entity, ir);
+    showPanel(entity, ir, sourceLinkOverrides);
     if (entity.kind === "datashape") {
       view = {
         tracedShape: view.tracedShape === entity.id ? null : entity.id,

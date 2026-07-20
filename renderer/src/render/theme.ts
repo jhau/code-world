@@ -39,6 +39,8 @@ export interface Theme {
   permit: { card: number; seal: number; tent: number };
   /** Unguarded exit chutes where issued permits leave the city. */
   postern: { frame: number };
+  /** Fixed furniture around role-colored document sheets. */
+  schematic: { frame: number; pedestal: number };
 }
 
 export const defaultTheme: Theme = {
@@ -91,6 +93,7 @@ export const defaultTheme: Theme = {
   gate: { tower: 0x525d73, lintel: 0xd9b44a },
   permit: { card: 0x5fd4e8, seal: 0xd9b44a, tent: 0x566070 },
   postern: { frame: 0x475064 },
+  schematic: { frame: 0x46566f, pedestal: 0x4b4138 },
 };
 
 /** Style key for a relation, or null when the relation is not drawn (M1

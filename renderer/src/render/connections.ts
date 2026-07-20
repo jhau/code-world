@@ -10,6 +10,8 @@ import type { Entity, Relation, WorldIR } from "../ir/types";
 import type { LayoutNode, WorldLayout } from "../layout/layout";
 import { buildStreetGrid, routeStreet, type Point2 } from "../layout/streets";
 import type { CityGate, Postern } from "./gates";
+import { chooseDoorSide, type DoorSide } from "./placement";
+import { buildSchematicMeshes, deriveSchematics } from "./schematics";
 import { routeKeyFor, type Theme } from "./theme";
 
 export interface Route {
@@ -419,33 +421,6 @@ function arcMesh(
  * door goes on the first side (+z, -z, +x, -x) whose street is not blocked
  * by a neighboring building — deterministic fixed order.
  */
-interface DoorSide {
-  axis: "x" | "z";
-  dir: 1 | -1;
-}
-
-function chooseDoorSide(target: LayoutNode, obstacles: LayoutNode[]): DoorSide {
-  const { rect } = target;
-  const cx = rect.x + rect.w / 2;
-  const cz = rect.z + rect.d / 2;
-  const probes: Array<{ side: DoorSide; x: number; z: number }> = [
-    { side: { axis: "z", dir: 1 }, x: cx, z: rect.z + rect.d + 0.35 },
-    { side: { axis: "z", dir: -1 }, x: cx, z: rect.z - 0.35 },
-    { side: { axis: "x", dir: 1 }, x: rect.x + rect.w + 0.35, z: cz },
-    { side: { axis: "x", dir: -1 }, x: rect.x - 0.35, z: cz },
-  ];
-  const blocked = (x: number, z: number) =>
-    obstacles.some(
-      (o) =>
-        o !== target &&
-        x >= o.rect.x &&
-        x <= o.rect.x + o.rect.w &&
-        z >= o.rect.z &&
-        z <= o.rect.z + o.rect.d,
-    );
-  return (probes.find((p) => !blocked(p.x, p.z)) ?? probes[0]!).side;
-}
-
 const DOOR = { w: 0.34, h: 0.5, t: 0.06 };
 const LOCK = { w: 0.11, h: 0.1, t: 0.05, r: 0.045, tube: 0.013, step: 0.17 };
 
@@ -523,6 +498,8 @@ export function buildConnections(
   posterns: Postern[],
 ): BuiltConnections {
   const suppressed = new Set(gates.map((g) => g.entity.id));
+  const schematics = deriveSchematics(layout, suppressed);
+  for (const schematic of schematics) suppressed.add(schematic.shape.entity.id);
   const anchors = buildAnchors(layout);
   // Gate entities have no in-city building; their edges anchor at the gate.
   for (const gate of gates) {
@@ -555,6 +532,9 @@ export function buildConnections(
   const obstacles = layout.nodes.filter(
     (n) => (n.role === "building" || n.role === "room") && !suppressed.has(n.entity.id),
   );
+  const builtSchematics = buildSchematicMeshes(schematics, theme, obstacles);
+  group.add(builtSchematics.group);
+  pickables.push(...builtSchematics.pickables);
   for (const [targetId, rels] of guardsByTarget) {
     rels.sort((a, b) => (a.from < b.from ? -1 : 1));
     const target = nodeById.get(targetId)!;

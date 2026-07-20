@@ -5,6 +5,8 @@
 meta:
   ir_version: 0.1-draft
   repo: petstore
+  repo_url: https://github.com/manish87sharma/PetStore
+  ref: master
   commit: UNKNOWN (reconstruction of manish87sharma/PetStore @ master)
   frontends:
     - language: typescript
@@ -25,18 +27,26 @@ entities:
 
   # ── units ──
   - { id: unit:src/server.ts, kind: unit, contains_parent: dir:src,
-      roles: [app-entry], provenance: inferred }
-  - { id: unit:config/database.ts, kind: unit, contains_parent: dir:config, provenance: inferred }
+      roles: [app-entry], source: { file: src/server.ts }, provenance: inferred }
+  - { id: unit:config/database.ts, kind: unit, contains_parent: dir:config,
+      source: { file: config/database.ts }, provenance: inferred }
   - { id: unit:src/middleware/auth.ts, kind: unit, contains_parent: dir:src/middleware,
       magnitudes: { fan_in: { raw: 5, norm: 1.0 } },   # guards 5 routes
-      provenance: inferred }
-  - { id: unit:src/models/User.ts, kind: unit, contains_parent: dir:src/models, provenance: inferred }
-  - { id: unit:src/models/Profile.ts, kind: unit, contains_parent: dir:src/models, provenance: inferred }
-  - { id: unit:src/routes/api/user.ts, kind: unit, contains_parent: dir:src/routes/api, provenance: inferred }
-  - { id: unit:src/routes/api/auth.ts, kind: unit, contains_parent: dir:src/routes/api, provenance: inferred }
-  - { id: unit:src/routes/api/profile.ts, kind: unit, contains_parent: dir:src/routes/api, provenance: inferred }
-  - { id: unit:src/types/Request.ts, kind: unit, contains_parent: dir:src/types, provenance: inferred }
-  - { id: unit:src/types/Payload.ts, kind: unit, contains_parent: dir:src/types, provenance: inferred }
+      source: { file: src/middleware/auth.ts }, provenance: inferred }
+  - { id: unit:src/models/User.ts, kind: unit, contains_parent: dir:src/models,
+      source: { file: src/models/User.ts }, provenance: inferred }
+  - { id: unit:src/models/Profile.ts, kind: unit, contains_parent: dir:src/models,
+      source: { file: src/models/Profile.ts }, provenance: inferred }
+  - { id: unit:src/routes/api/user.ts, kind: unit, contains_parent: dir:src/routes/api,
+      source: { file: src/routes/api/user.ts }, provenance: inferred }
+  - { id: unit:src/routes/api/auth.ts, kind: unit, contains_parent: dir:src/routes/api,
+      source: { file: src/routes/api/auth.ts }, provenance: inferred }
+  - { id: unit:src/routes/api/profile.ts, kind: unit, contains_parent: dir:src/routes/api,
+      source: { file: src/routes/api/profile.ts }, provenance: inferred }
+  - { id: unit:src/types/Request.ts, kind: unit, contains_parent: dir:src/types,
+      source: { file: src/types/Request.ts }, provenance: inferred }
+  - { id: unit:src/types/Payload.ts, kind: unit, contains_parent: dir:src/types,
+      source: { file: src/types/Payload.ts }, provenance: inferred }
 
   # ── datashapes ──
   - id: sym:src/models/User#IUser

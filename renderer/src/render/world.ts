@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { LayoutNode, WorldLayout } from "../layout/layout";
 import type { Entity } from "../ir/types";
 import { WALL, type CityGate, type Postern, type WallOpening } from "./gates";
+import { deriveSchematics } from "./schematics";
 import { colorFor, externalColor, type Theme } from "./theme";
 
 export interface Pickable {
@@ -124,6 +125,9 @@ export function buildWorld(
   group.add(ground);
 
   const suppressed = new Set(gates.map((g) => g.entity.id));
+  for (const schematic of deriveSchematics(layout, suppressed)) {
+    suppressed.add(schematic.shape.entity.id);
+  }
   addNode(layout.root, theme, group, pickables, suppressed);
   addWall(layout, theme, [...gates, ...posterns], group);
   addExternals(layout, theme, group, pickables);
